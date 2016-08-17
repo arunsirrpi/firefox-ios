@@ -12,10 +12,6 @@ private let log = Logger.syncLogger
 // The version of the account schema we persist.
 let AccountSchemaVersion = 1
 
-// The current version of the device registration, we use this to re-register
-// devices after we update what we send on device registration.
-let DEVICE_REGISTRATION_VERSION = 1
-
 /// A FirefoxAccount mediates access to identity attached services.
 ///
 /// All data maintained as part of the account or its state should be
@@ -53,11 +49,11 @@ public class FirefoxAccount {
         return stateCache.value!.actionNeeded
     }
 
-    public convenience init(configuration: FirefoxAccountConfiguration, email: String, uid: String, fxaDeviceId: String?, deviceRegistrationVersion: Int, stateKeyLabel: String, state: FxAState) {
+    private convenience init(configuration: FirefoxAccountConfiguration, email: String, uid: String, fxaDeviceId: String?, deviceRegistrationVersion: Int, stateKeyLabel: String, state: FxAState) {
         self.init(configuration: configuration, email: email, uid: uid, fxaDeviceId: fxaDeviceId, deviceRegistrationVersion: deviceRegistrationVersion, stateCache: KeychainCache(branch: "account.state", label: stateKeyLabel, value: state))
     }
 
-    public init(configuration: FirefoxAccountConfiguration, email: String, uid: String, fxaDeviceId: String?, deviceRegistrationVersion: Int, stateCache: KeychainCache<FxAState>) {
+    private init(configuration: FirefoxAccountConfiguration, email: String, uid: String, fxaDeviceId: String?, deviceRegistrationVersion: Int, stateCache: KeychainCache<FxAState>) {
         self.email = email
         self.uid = uid
         self.fxaDeviceId = fxaDeviceId
@@ -244,27 +240,5 @@ public class FirefoxAccount {
         }
         log.info("Cannot make Account State be CohabitingWithoutKeyPair from state with label \(self.stateCache.value?.label).")
         return false
-    }
-
-    public func registerOrUpdateDevice(state: MarriedState) -> Deferred<Maybe<String>> {
-        let sessionToken = state.sessionToken
-        let result: Deferred<Maybe<FxADeviceRegistrationResponse>>
-        let client = FxAClient10()
-        let name = DeviceInfo.defaultClientName()
-        if let deviceId = fxaDeviceId { // Create device
-            result = client.updateDevice(self, sessionToken: sessionToken, id: deviceId, name: name)
-        } else { // Update device
-            result = client.registerDevice(self, sessionToken: sessionToken, name: name, type: "mobile")
-        }
-
-        return result.map { result in
-            if let device = result.successValue {
-                self.fxaDeviceId = device.id
-                self.deviceRegistrationVersion = DEVICE_REGISTRATION_VERSION
-                return Maybe(success: device.id)
-            } else {
-                return Maybe(failure: AccountError.DeviceRegistrationFailed)
-            }
-        }
     }
 }
